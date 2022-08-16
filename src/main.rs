@@ -1,51 +1,54 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 
-use anyhow::Result;
-use sudoku::{Cell, Sudoku};
+use sudoku::{
+    from_digit_line, single_possibility, to_debug_grid, to_pretty_grid, uniqueness_eliminate,
+};
 
-fn parse_sudoku_line(line: &str) -> Result<Sudoku> {
-    let cells = line.chars().map(|c| c.to_digit(10).unwrap()).map(|d| {
-        if d == 0 {
-            Cell::unknown()
-        } else {
-            Cell::known(d as usize)
-        }
-    });
-
-    let mut i = 0;
-    let mut s = [Cell::unknown(); 81];
-    for cell in cells {
-        s[i] = cell;
-        i += 1;
-    }
-
-    debug_assert!(i == 81);
-    Ok(Sudoku::new(s))
-}
-
-struct Pair {
-    puzzle: Sudoku,
-    solution: Sudoku,
-}
-
-fn main() {
+fn main() -> anyhow::Result<()> {
     let file = io::BufReader::new(File::open("sudoku.csv").unwrap());
-    let mut puzzles = vec![];
+    let mut solved = 0;
 
     for line in file.lines().skip(1).flatten() {
         let mut fields = line.split(',');
-        let puzzle = parse_sudoku_line(fields.next().unwrap()).unwrap();
-        let solution = parse_sudoku_line(fields.next().unwrap()).unwrap();
+        let mut puzzle = from_digit_line(fields.next().unwrap());
+        let solution = from_digit_line(fields.next().unwrap());
 
         if !solution.is_solved() {
-            println!("{solution:?}");
+            println!("Should be solved: {solution:?}");
             break;
         }
 
-        puzzles.push(Pair { puzzle, solution });
+        if puzzle.is_solved() {
+            println!("Should NOT be solved: {puzzle:?}");
+            break;
+        }
+
+        let mut score = usize::MAX;
+        loop {
+            let new_score = puzzle.score();
+            if puzzle.is_solved() {
+                solved += 1;
+                println!("Solved {solved}");
+                assert_eq!(puzzle, solution);
+                break;
+            }
+
+            if score == new_score {
+                println!("FAILED TO SOLVE:\n{}", to_pretty_grid(&puzzle));
+                println!("{}", to_debug_grid(&puzzle));
+
+                let mut placeholder = String::new();
+                std::io::stdin().read_line(&mut placeholder)?;
+
+                break;
+            }
+
+            score = new_score;
+            puzzle.apply_to_groups(uniqueness_eliminate);
+            puzzle.apply_to_groups(single_possibility);
+        }
     }
 
-    let count = puzzles.len();
-    println!("processed {count}");
+    Ok(())
 }
