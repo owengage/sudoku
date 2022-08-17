@@ -101,6 +101,7 @@ impl Sudoku {
 
     pub fn is_solved(&self) -> bool {
         self.state.iter().all(Cell::is_solved)
+        
     }
 
     /// Score is the total number of possible values left for each cell, minus
